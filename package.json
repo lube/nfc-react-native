@@ -1,6 +1,6 @@
 {
   "name": "nfc-react-native",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "NFC Wrapper",
   "main": "index.android.js",
   "scripts": {
