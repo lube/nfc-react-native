@@ -14,7 +14,7 @@ nfc-react-native is a react-native module for android to write/read Mifare Class
 
 #### Android
 
-1. Open up `android/app/src/main/java/[...]/MainActivity.java`
+1. Open up `android/app/src/main/java/[...]/MainApplication.java`
   - Add `import es.tiarg.nfcreactnative.NfcReactNativePackage;` to the imports at the top of the file
   - Add `new NfcReactNativePackage()` to the list returned by the `getPackages()` method
 2. Append the following lines to `android/settings.gradle`:
