@@ -157,8 +157,8 @@ class NfcReactNativeModule extends ReactContextBaseJavaModule implements Activit
 
         } catch (Exception ex) {
             StringWriter sw = new StringWriter();
-            PrintWriter pw = new PrintWriter(sw);
-            this.tagPromise.reject(sw.toString());
+            ex.printStackTrace(new PrintWriter(sw));
+            this.tagPromise.reject(sw.toString(), ex.getMessage());
         } finally {
             this.operation = OP_NOT_READY;
         }
