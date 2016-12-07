@@ -92,18 +92,16 @@ class NfcReactNativeModule extends ReactContextBaseJavaModule implements Activit
 
                 if (authResult) {
 
+                    WritableMap dataBloque = Arguments.createMap();
                     WritableMap dataSector = Arguments.createMap();
                     WritableArray bloquesXSector = Arguments.createArray();
-                    WritableMap dataBloque = Arguments.createMap();
 
                     switch (this.operation) {
                         case OP_READ:
                             for (i = 0; i < sector.getArray("bloques").size(); i++) {
                                 int iBloque = sector.getArray("bloques").getInt(i);
 
-                                dataBloque.putArray("data", Arguments.fromArray(arrayBytesToArrayInts(tag.readBlock(4 * sector.getInt("sector") + iBloque))));
-
-                                bloquesXSector.pushMap(dataBloque);
+                                bloquesXSector.pushArray(Arguments.fromArray(arrayBytesToArrayInts(tag.readBlock(4 * sector.getInt("sector") + iBloque))));
                             }
 
                             dataSector.putArray("bloques", bloquesXSector);
@@ -123,6 +121,8 @@ class NfcReactNativeModule extends ReactContextBaseJavaModule implements Activit
                                     writeDataA[i] = data.getInt(i);
 
                                 tag.writeBlock(4 * sector.getInt("sector") + rmBloque.getInt("indice"), arrayIntsToArrayBytes(writeDataA));
+
+                                dataBloque.putArray("data", Arguments.fromArray(writeDataA));
 
                                 dataBloque.putArray("data", Arguments.fromArray(writeDataA));
                                 dataBloque.putInt("indice",  rmBloque.getInt("indice"));
@@ -157,7 +157,8 @@ class NfcReactNativeModule extends ReactContextBaseJavaModule implements Activit
 
         } catch (Exception ex) {
             StringWriter sw = new StringWriter();
-            ex.printStackTrace(new PrintWriter(sw));
+            PrintWriter pw = new PrintWriter(sw);
+
             this.tagPromise.reject(sw.toString(), ex.getMessage());
         } finally {
             this.operation = OP_NOT_READY;
