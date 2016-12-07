@@ -32,28 +32,44 @@ nfc-react-native is a react-native module for android to write/read Mifare Class
 import {readTag, writeTag} from 'nfc-react-native'
 
 ...
-  componentWillMount() {  
+  //get card id
+  getCardId()
+    .then((card) => {
+      console.log(card)
+    }).catch((err) => {
+      console.log(err)
+  })    
 
-      getCardId()
-        .then((card) => {
-          console.log(card)
-        }).catch((err) => {
-          console.log(err)
-      })    
-    // readTag([{ sector: 15, bloques: [2], clave: 'FFFFFFFFFFFF', tipoClave: 'A' }])
-    // .then((card) => {
-    //   console.log(card)
-    // }).catch((err) => {
-    //   console.log(err)
-    // })
-    // console.log('from promise')
-    // writeTag([{ sector: 15, bloques: [ { indice: 2, data: [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1] } ], clave: 'FFFFFFFFFFFF', tipoClave: 'A' }])
-    //   .then((card) => {
-    //     console.log(card)
-    //   }).catch((err) => {
-    //     console.log(err)
-    // })
-  }
+  //read multiple sectors + blocks and get card id
+  readTag([{ sector: 5, bloques: [1,2], clave: 'FFFFFFFFFFFF', tipoClave: 'A' },
+    { sector: 6, bloques: [0,1,2], clave: 'FFFFFFFFFFFF', tipoClave: 'A' },
+    { sector: 4, bloques: [0], clave: 'FFFFFFFFFFFF', tipoClave: 'A' }])
+  .then((card) => {
+    console.log(card)
+    // returns Object {lectura: Array[3], card: "A3F813DB"}
+  }).catch((err) => {
+    console.log(err.message)
+  })
+
+  //writes multiple sectors and blocks but you must provide card id
+  writeTag([{ sector: 5, bloques: [ 
+   { indice: 1, data: [15,15,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,15,15] },
+   { indice: 2, data: [15,15,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,15,15] } ],
+    clave: 'FFFFFFFFFFFF', tipoClave: 'A' },
+    { sector: 6, bloques: [ 
+   { indice: 0, data: [15,15,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,15,15] },
+   { indice: 1, data: [15,15,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,15,15] },
+   { indice: 2, data: [15,15,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,15,15] } ],
+    clave: 'FFFFFFFFFFFF', tipoClave: 'A' },
+   { sector: 4, bloques: [ 
+   { indice: 0, data: [15,15,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,15,15] } ],
+    clave: 'FFFFFFFFFFFF', tipoClave: 'A' },
+    ], "A3F813DB")
+   .then((card) => {
+     console.log(card)
+   }).catch((err) => {
+     console.log(err.message)
+   })
 ...
 ```
 
