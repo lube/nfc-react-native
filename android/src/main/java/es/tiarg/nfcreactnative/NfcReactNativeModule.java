@@ -42,6 +42,8 @@ class NfcReactNativeModule extends ReactContextBaseJavaModule implements Activit
     private int block;
 
     private String operation;
+    private String cardId;
+
     private ReadableArray sectores;
 
     private Promise tagPromise;
@@ -84,55 +86,52 @@ class NfcReactNativeModule extends ReactContextBaseJavaModule implements Activit
                 ReadableMap sector = this.sectores.getMap(i);
                 boolean authResult;
 
-                if (sector.getString("tipoClave").equals("A")) {
-                    authResult = tag.authenticateSectorWithKeyA(sector.getInt("sector"), hexStringToByteArray(sector.getString("clave")));
+                if (this.sectores.getMap(i).getString("tipoClave").equals("A")) {
+                    authResult = tag.authenticateSectorWithKeyA(this.sectores.getMap(i).getInt("sector"), hexStringToByteArray(this.sectores.getMap(i).getString("clave")));
                 } else {
-                    authResult = tag.authenticateSectorWithKeyB(sector.getInt("sector"), hexStringToByteArray(sector.getString("clave")));
+                    authResult = tag.authenticateSectorWithKeyB(this.sectores.getMap(i).getInt("sector"), hexStringToByteArray(this.sectores.getMap(i).getString("clave")));
+                }
+
+                if (this.operation.equals(OP_WRITE) && !this.cardId.equals(bin2hex(tag.getTag().getId()))) {
+                    this.tagPromise.reject("Id Error", "Apoye la misma tarjeta que leyo por primera vez");
+                    return;
                 }
 
                 if (authResult) {
-
-                    WritableMap dataBloque = Arguments.createMap();
                     WritableMap dataSector = Arguments.createMap();
                     WritableArray bloquesXSector = Arguments.createArray();
 
                     switch (this.operation) {
                         case OP_READ:
-                            for (i = 0; i < sector.getArray("bloques").size(); i++) {
-                                int iBloque = sector.getArray("bloques").getInt(i);
+                            for (int j = 0; j < this.sectores.getMap(i).getArray("bloques").size(); j++) {
+                                int iBloque = this.sectores.getMap(i).getArray("bloques").getInt(j);
 
-                                bloquesXSector.pushArray(Arguments.fromArray(arrayBytesToArrayInts(tag.readBlock(4 * sector.getInt("sector") + iBloque))));
+                                bloquesXSector.pushArray(Arguments.fromArray(arrayBytesToArrayInts(tag.readBlock(4 * this.sectores.getMap(i).getInt("sector") + iBloque))));
                             }
 
                             dataSector.putArray("bloques", bloquesXSector);
-                            dataSector.putInt("sector", sector.getInt("sector"));
+                            dataSector.putInt("sector", this.sectores.getMap(i).getInt("sector"));
 
                             readDataSectors.pushMap(dataSector);
 
                             break;
                         case OP_WRITE:
-                            for (i = 0; i < sector.getArray("bloques").size(); i++) {
-                                ReadableMap rmBloque = sector.getArray("bloques").getMap(i);
+                            for (int k = 0; k < this.sectores.getMap(i).getArray("bloques").size(); k++) {
+                                ReadableMap rmBloque = this.sectores.getMap(i).getArray("bloques").getMap(k);
 
                                 ReadableNativeArray data = (ReadableNativeArray)rmBloque.getArray("data");
 
                                 int[] writeDataA = new int[data.size()];
-                                for(i = 0; i < data.size(); i++)
-                                    writeDataA[i] = data.getInt(i);
+                                for(int l = 0; l < data.size(); l++)
+                                    writeDataA[l] = data.getInt(l);
 
-                                tag.writeBlock(4 * sector.getInt("sector") + rmBloque.getInt("indice"), arrayIntsToArrayBytes(writeDataA));
+                                tag.writeBlock(4 * this.sectores.getMap(i).getInt("sector") + rmBloque.getInt("indice"), arrayIntsToArrayBytes(writeDataA));
 
-                                dataBloque.putArray("data", Arguments.fromArray(writeDataA));
-
-                                dataBloque.putArray("data", Arguments.fromArray(writeDataA));
-                                dataBloque.putInt("indice",  rmBloque.getInt("indice"));
-                                dataBloque.putBoolean("error",  false);
-
-                                bloquesXSector.pushMap(dataBloque);
+                                bloquesXSector.pushMap(Arguments.createMap());
                             }
 
                             dataSector.putArray("bloques", bloquesXSector);
-                            dataSector.putInt("sector", sector.getInt("sector"));
+                            dataSector.putInt("sector", this.sectores.getMap(i).getInt("sector"));
 
                             writeData.pushMap(dataSector);
 
@@ -142,6 +141,9 @@ class NfcReactNativeModule extends ReactContextBaseJavaModule implements Activit
                         default:
                             break;
                     }
+                }
+                else {
+                    this.tagPromise.reject("Auth Error", "Error de Autenticación con la tarjeta");
                 }
             }
             tag.close();
@@ -191,7 +193,9 @@ class NfcReactNativeModule extends ReactContextBaseJavaModule implements Activit
 
     @ReactMethod
     public void writeTag(ReadableArray sectores,
+                         String cardId,
                          Promise promise) {
+        this.cardId = cardId;
         this.sectores = sectores;
         this.operation = OP_WRITE;
         this.tagPromise = promise;
