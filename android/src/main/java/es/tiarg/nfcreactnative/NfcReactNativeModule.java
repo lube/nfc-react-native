@@ -26,6 +26,11 @@ import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
 
+import static android.R.attr.data;
+import static android.R.attr.defaultValue;
+import static android.R.attr.x;
+import static com.facebook.common.util.Hex.hexStringToByteArray;
+
 
 class NfcReactNativeModule extends ReactContextBaseJavaModule implements ActivityEventListener {
     private ReactApplicationContext reactContext;
@@ -57,8 +62,6 @@ class NfcReactNativeModule extends ReactContextBaseJavaModule implements Activit
     @Override
     public void onNewIntent(Intent intent) {
 
-        WritableArray nfcData = Arguments.createArray();
-
         MifareClassic tag = MifareClassic.get( (Tag)intent.getParcelableExtra(NfcAdapter.EXTRA_TAG));
 
         try {
@@ -71,6 +74,11 @@ class NfcReactNativeModule extends ReactContextBaseJavaModule implements Activit
                 return;
             }
 
+            WritableMap readData = Arguments.createMap();
+            WritableArray readDataSectors = Arguments.createArray();
+            readData.putString("card", bin2hex(tag.getTag().getId()));
+
+            WritableArray writeData = Arguments.createArray();
 
             for (int i = 0; i < this.sectores.size(); i++) {
                 ReadableMap sector = this.sectores.getMap(i);
@@ -101,7 +109,7 @@ class NfcReactNativeModule extends ReactContextBaseJavaModule implements Activit
                             dataSector.putArray("bloques", bloquesXSector);
                             dataSector.putInt("sector", sector.getInt("sector"));
 
-                            nfcData.pushMap(dataSector);
+                            readDataSectors.pushMap(dataSector);
 
                             break;
                         case OP_WRITE:
@@ -110,13 +118,13 @@ class NfcReactNativeModule extends ReactContextBaseJavaModule implements Activit
 
                                 ReadableNativeArray data = (ReadableNativeArray)rmBloque.getArray("data");
 
-                                int[] writeData = new int[data.size()];
+                                int[] writeDataA = new int[data.size()];
                                 for(i = 0; i < data.size(); i++)
-                                    writeData[i] = data.getInt(i);
+                                    writeDataA[i] = data.getInt(i);
 
-                                tag.writeBlock(4 * sector.getInt("sector") + rmBloque.getInt("indice"), arrayIntsToArrayBytes(writeData));
+                                tag.writeBlock(4 * sector.getInt("sector") + rmBloque.getInt("indice"), arrayIntsToArrayBytes(writeDataA));
 
-                                dataBloque.putArray("data", Arguments.fromArray(writeData));
+                                dataBloque.putArray("data", Arguments.fromArray(writeDataA));
                                 dataBloque.putInt("indice",  rmBloque.getInt("indice"));
                                 dataBloque.putBoolean("error",  false);
 
@@ -126,7 +134,7 @@ class NfcReactNativeModule extends ReactContextBaseJavaModule implements Activit
                             dataSector.putArray("bloques", bloquesXSector);
                             dataSector.putInt("sector", sector.getInt("sector"));
 
-                            nfcData.pushMap(dataSector);
+                            writeData.pushMap(dataSector);
 
                             break;
                         case OP_NOT_READY:
@@ -138,7 +146,15 @@ class NfcReactNativeModule extends ReactContextBaseJavaModule implements Activit
             }
             tag.close();
 
-            this.tagPromise.resolve(nfcData);
+            readData.putArray("lectura",readDataSectors);
+
+            if (this.operation.equals(OP_READ)) {
+                this.tagPromise.resolve(readData);
+            }
+            if (this.operation.equals(OP_WRITE)){
+                this.tagPromise.resolve(writeData);
+            }
+
         } catch (Exception ex) {
             StringWriter sw = new StringWriter();
             PrintWriter pw = new PrintWriter(sw);
@@ -155,8 +171,7 @@ class NfcReactNativeModule extends ReactContextBaseJavaModule implements Activit
       final int resultCode,
       final Intent intent) {
     }
-    
-    /**
+ /**
      * @return the name of this module. This will be the name used to {@code require()} this module
      * from javascript.
      */
@@ -209,21 +224,27 @@ class NfcReactNativeModule extends ReactContextBaseJavaModule implements Activit
     private static byte[] arrayIntsToArrayBytes(int[] listaInts) {
         
         ByteBuffer bytebuffer = ByteBuffer.allocate(16);
-        
-        for (int i : listaInts) {
-            bytebuffer.put((byte) i);
+
+        for (int i = 0; i < 16; i++) {
+
+            byte high = (byte)((byte)listaInts[i*2] & 0xf0 >> 4);
+            byte low =  (byte)((byte)listaInts[i*2+1] & 0x0f);
+            bytebuffer.put((byte)(high << 4 | low));
         }
-        
+
         return bytebuffer.array();
 
     }
 
     private static int[] arrayBytesToArrayInts(byte[] listaBytes) {
         
-        IntBuffer arraybuffer = IntBuffer.allocate(16);
-        
-        for (byte b : listaBytes) {
-            arraybuffer.put((int) b);
+        IntBuffer arraybuffer = IntBuffer.allocate(32);
+
+        for(byte b : listaBytes) {
+            int high = (b & 0xf0) >> 4;
+            int low = b & 0x0f;
+            arraybuffer.put(high);
+            arraybuffer.put(low);
         }
         
         return arraybuffer.array();
