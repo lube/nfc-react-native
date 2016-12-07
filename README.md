@@ -18,14 +18,14 @@ nfc-react-native is a react-native module for android to write/read Mifare Class
   - Add `import es.tiarg.nfcreactnative.NfcReactNativePackage;` to the imports at the top of the file
   - Add `new NfcReactNativePackage()` to the list returned by the `getPackages()` method
 2. Append the following lines to `android/settings.gradle`:
-  	```
-  	include ':nfc-react-native'
-  	project(':nfc-react-native').projectDir = new File(rootProject.projectDir, 	'../node_modules/nfc-react-native/android')
-  	```
+    ```
+    include ':nfc-react-native'
+    project(':nfc-react-native').projectDir = new File(rootProject.projectDir,  '../node_modules/nfc-react-native/android')
+    ```
 3. Insert the following lines inside the dependencies block in `android/app/build.gradle`:
-  	```
+    ```
       compile project(':nfc-react-native')
-  	```
+    ```
 
 ## Usage
 ```javascript
@@ -33,15 +33,26 @@ import {readTag, writeTag} from 'nfc-react-native'
 
 ...
   componentWillMount() {  
-  			 //content                          sector block key
-    writeTag('12341234123412341234123412341234', 1, 0, 'FFFFFFFFFFFF').then((r) => {
-																	       console.log('from promise')
-																	       console.log(r)
-			//sector block key														   }) 
-    readTag(1, 0, 'FFFFFFFFFFFF').then((r) => {
-	                                  console.log('from promise')
-	                                  console.log(r)
-                                 })
+
+      getCardId()
+        .then((card) => {
+          console.log(card)
+        }).catch((err) => {
+          console.log(err)
+      })    
+    // readTag([{ sector: 15, bloques: [2], clave: 'FFFFFFFFFFFF', tipoClave: 'A' }])
+    // .then((card) => {
+    //   console.log(card)
+    // }).catch((err) => {
+    //   console.log(err)
+    // })
+    // console.log('from promise')
+    // writeTag([{ sector: 15, bloques: [ { indice: 2, data: [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1] } ], clave: 'FFFFFFFFFFFF', tipoClave: 'A' }])
+    //   .then((card) => {
+    //     console.log(card)
+    //   }).catch((err) => {
+    //     console.log(err)
+    // })
   }
 ...
 ```
@@ -57,17 +68,17 @@ Your main activity should look like
 ```xml
 ...
 <activity
-	android:name=".MainActivity"
-	android:launchMode="singleTask"
-	android:label="@string/app_name"
-	android:configChanges="keyboard|keyboardHidden|orientation|screenSize">
+  android:name=".MainActivity"
+  android:launchMode="singleTask"
+  android:label="@string/app_name"
+  android:configChanges="keyboard|keyboardHidden|orientation|screenSize">
 
-	<intent-filter>
-	  <action android:name="android.nfc.action.TECH_DISCOVERED"/>
-	</intent-filter>
+  <intent-filter>
+    <action android:name="android.nfc.action.TECH_DISCOVERED"/>
+  </intent-filter>
 
-	<meta-data android:name="android.nfc.action.TECH_DISCOVERED"
-	           android:resource="@xml/nfc_tech_filter" />
+  <meta-data android:name="android.nfc.action.TECH_DISCOVERED"
+             android:resource="@xml/nfc_tech_filter" />
 </activity>
 ```
 
