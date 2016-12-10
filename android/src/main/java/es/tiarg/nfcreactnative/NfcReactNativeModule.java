@@ -144,6 +144,7 @@ class NfcReactNativeModule extends ReactContextBaseJavaModule implements Activit
                 }
                 else {
                     this.tagPromise.reject("Auth Error", "Error de Autenticación con la tarjeta");
+                    return;
                 }
             }
             tag.close();
