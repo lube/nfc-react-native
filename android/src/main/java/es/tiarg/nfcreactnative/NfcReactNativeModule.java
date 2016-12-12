@@ -123,7 +123,7 @@ class NfcReactNativeModule extends ReactContextBaseJavaModule implements Activit
                             for (int k = 0; k < this.sectores.getMap(i).getArray("bloques").size(); k++) {
                                 ReadableMap rmBloque = this.sectores.getMap(i).getArray("bloques").getMap(k);
 
-                                ReadableNativeArray data = (ReadableNativeArray)rmBloque.getArray("data");
+                      void          ReadableNativeArray data = (ReadableNativeArray)rmBloque.getArray("data");
 
                                 int[] writeDataA = new int[data.size()];
                                 for(int l = 0; l < data.size(); l++)
@@ -215,7 +215,7 @@ class NfcReactNativeModule extends ReactContextBaseJavaModule implements Activit
         this.tagPromise = promise;
     }
 
-    private cancelOperation () {
+    private void cancelOperation () {
         if (!this.operation.equals(OP_NOT_READY)) {
             this.tagPromise.reject("Operacion Cancelada");
             this.operation = OP_NOT_READY;
