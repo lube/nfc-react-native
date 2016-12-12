@@ -58,6 +58,7 @@ class NfcReactNativeModule extends ReactContextBaseJavaModule implements Activit
         super(reactContext);
         this.reactContext = reactContext;
         this.reactContext.addActivityEventListener(this);
+        this.operation = OP_NOT_READY;
     }
 
 
