@@ -42,7 +42,7 @@ class NfcReactNativeModule extends ReactContextBaseJavaModule implements Activit
     private int block;
 
     private String operation;
-    private String cardId;
+    private int cardId;
 
     private ReadableArray sectores;
 
@@ -76,14 +76,16 @@ class NfcReactNativeModule extends ReactContextBaseJavaModule implements Activit
 
             if (this.operation.equals(OP_ID)) {
                 WritableMap idData = Arguments.createMap();
-                idData.putString("id", bin2hex(tag.getTag().getId()));
+                ByteBuffer bb = ByteBuffer.wrap(tag.getTag().getId());
+                idData.putInt("id", bb.getInt());
                 this.tagPromise.resolve(idData);
                 return;
             }
 
             WritableMap readData = Arguments.createMap();
             WritableArray readDataSectors = Arguments.createArray();
-            readData.putString("card", bin2hex(tag.getTag().getId()));
+            ByteBuffer bb = ByteBuffer.wrap(tag.getTag().getId());
+            readData.putInt("card", bb.getInt());
 
             WritableArray writeData = Arguments.createArray();
 
@@ -97,7 +99,7 @@ class NfcReactNativeModule extends ReactContextBaseJavaModule implements Activit
                     authResult = tag.authenticateSectorWithKeyB(this.sectores.getMap(i).getInt("sector"), hexStringToByteArray(this.sectores.getMap(i).getString("clave")));
                 }
 
-                if (this.operation.equals(OP_WRITE) && !this.cardId.equals(bin2hex(tag.getTag().getId()))) {
+                if (this.operation.equals(OP_WRITE) && !this.cardId == bb.getInt()) {
                     this.tagPromise.reject("Id Error", "Apoye la misma tarjeta que leyo por primera vez");
                     return;
                 }
@@ -200,7 +202,7 @@ class NfcReactNativeModule extends ReactContextBaseJavaModule implements Activit
 
     @ReactMethod
     public void writeTag(ReadableArray sectores,
-                         String cardId,
+                         int cardId,
                          Promise promise) {
         this.cancelOperation();
         this.cardId = cardId;
