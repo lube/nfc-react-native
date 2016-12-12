@@ -64,6 +64,10 @@ class NfcReactNativeModule extends ReactContextBaseJavaModule implements Activit
     @Override
     public void onNewIntent(Intent intent) {
 
+        if (this.operation.equals(OP_NOT_READY)) {
+            return;
+        }
+        
         MifareClassic tag = MifareClassic.get( (Tag)intent.getParcelableExtra(NfcAdapter.EXTRA_TAG));
 
         try {
@@ -187,6 +191,7 @@ class NfcReactNativeModule extends ReactContextBaseJavaModule implements Activit
     @ReactMethod
     public void readTag(ReadableArray sectores,
                         Promise promise) {
+        this.cancelOperation();
         this.sectores = sectores;
         this.operation = OP_READ;
         this.tagPromise = promise;
@@ -196,6 +201,7 @@ class NfcReactNativeModule extends ReactContextBaseJavaModule implements Activit
     public void writeTag(ReadableArray sectores,
                          String cardId,
                          Promise promise) {
+        this.cancelOperation();
         this.cardId = cardId;
         this.sectores = sectores;
         this.operation = OP_WRITE;
@@ -204,8 +210,16 @@ class NfcReactNativeModule extends ReactContextBaseJavaModule implements Activit
 
     @ReactMethod
     public void getCardId(Promise promise) {
+        this.cancelOperation();
         this.operation = OP_ID;
         this.tagPromise = promise;
+    }
+
+    private cancelOperation () {
+        if (!this.operation.equals(OP_NOT_READY)) {
+            this.tagPromise.reject("Operacion Cancelada");
+            this.operation = OP_NOT_READY;
+        }
     }
 
     private static byte[] hexStringToByteArray(String s) {
