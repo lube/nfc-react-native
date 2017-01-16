@@ -78,7 +78,7 @@ class NfcReactNativeModule extends ReactContextBaseJavaModule implements Activit
                 } else {
                     authResult = tag.authenticateSectorWithKeyB(this.sectores.getMap(i).getInt("sector"), hexStringToByteArray(this.sectores.getMap(i).getString("clave")));
                 }
-                if (this.cardId == 0 && this.operation.equals(OP_WRITE) && this.cardId != id) {
+                if (this.cardId != 0 && this.operation.equals(OP_WRITE) && this.cardId != id) {
                     this.tagPromise.reject("Id Error", "Apoye la misma tarjeta que leyo por primera vez");
                     return;
                 }
