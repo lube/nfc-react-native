@@ -1,6 +1,8 @@
 package es.tiarg.nfcreactnative;
 import com.facebook.react.bridge.ActivityEventListener;
+import com.facebook.react.bridge.LifecycleEventListener;
 import com.facebook.react.bridge.ReactApplicationContext;
+import com.facebook.react.bridge.ReactContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
 import com.facebook.react.bridge.WritableMap;
@@ -10,141 +12,250 @@ import com.facebook.react.bridge.ReadableArray;
 import com.facebook.react.bridge.ReadableNativeArray;
 import com.facebook.react.bridge.Arguments;
 import com.facebook.react.bridge.Promise;
+import com.facebook.react.modules.core.DeviceEventManagerModule;
+
 import android.app.Activity;
+import android.app.PendingIntent;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.nfc.NfcAdapter;
 import android.nfc.Tag;
 import android.nfc.tech.MifareClassic;
+import android.nfc.tech.Ndef;
+import android.os.Bundle;
+import android.util.Log;
+
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+
+import static android.R.attr.action;
 import static android.R.attr.data;
 import static android.R.attr.defaultValue;
+import static android.R.attr.id;
+import static android.R.attr.tag;
 import static android.R.attr.x;
+import static android.content.ContentValues.TAG;
+import static android.view.View.X;
 import static com.facebook.common.util.Hex.hexStringToByteArray;
 
-class NfcReactNativeModule extends ReactContextBaseJavaModule implements ActivityEventListener {
+
+
+class NfcReactNativeModule extends ReactContextBaseJavaModule implements ActivityEventListener, LifecycleEventListener {
     private ReactApplicationContext reactContext;
-    private byte[] key;
-    private byte[] content;
-    
-    private int sector;
-    private int block;
+
     private String operation;
-    private int cardId;
+    private int tagId;
+
     private ReadableArray sectores;
-    private Promise tagPromise;
+    private NfcAdapter mNfcAdapter;
+    private MifareClassic tag;
 
     private static final String OP_ID = "ID";
     private static final String OP_WRITE = "WRITE";
     private static final String OP_READ = "READ";
     private static final String OP_NOT_READY = "NOT_READY";
 
+    private class ThreadLectura implements Runnable {
+        public void run() {
+            if (tag != null && operation != OP_NOT_READY) {
+                try {
+                    tag.connect();
+
+                    ByteBuffer bb = ByteBuffer.wrap(tag.getTag().getId());
+                    int id = bb.getInt();
+
+                    if (operation.equals(OP_ID)) {
+                        WritableMap idData = Arguments.createMap();
+                        idData.putInt("id", id);
+                        reactContext
+                                .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
+                                .emit("onTagDetected", idData);
+                        return;
+                    }
+
+                    WritableMap readData = Arguments.createMap();
+                    WritableArray writeData = Arguments.createArray();
+                    WritableArray readDataSectors = Arguments.createArray();
+                    readData.putInt("tagId", id);
+
+                    for (int i = 0; i < sectores.size(); i++)
+                    {
+                        boolean authResult;
+                        if (sectores.getMap(i).getString("keyType").equals("A")) {
+                            authResult = tag.authenticateSectorWithKeyA(sectores.getMap(i).getInt("sector"), hexStringToByteArray(sectores.getMap(i).getString("clave")));
+                        } else {
+                            authResult = tag.authenticateSectorWithKeyB(sectores.getMap(i).getInt("sector"), hexStringToByteArray(sectores.getMap(i).getString("clave")));
+                        }
+
+                        if (tagId != 0 && operation.equals(OP_WRITE) && tagId != id) {
+                            WritableMap error = Arguments.createMap();
+                            error.putString("error", "Tag id doesn't match");
+
+                            reactContext
+                                    .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
+                                    .emit("onTagError", error);
+
+                            operation = OP_NOT_READY;
+                            return;
+                        }
+                        
+                        if (authResult) {
+                            
+                            WritableMap dataSector = Arguments.createMap();
+                            WritableArray blocksXSector = Arguments.createArray();
+                            
+                            switch (operation) {
+                                case OP_READ:
+                                    for (int j = 0; j < sectores.getMap(i).getArray("blocks").size(); j++) 
+                                    {
+                                        int iBloque = sectores.getMap(i).getArray("blocks").getInt(j);
+                                        byte[] blockData = tag.readBlock(4 * sectores.getMap(i).getInt("sector") + iBloque);
+                                        blocksXSector.pushArray(Arguments.fromArray(arrayBytesToArrayInts(blockData)));
+                                    }
+
+                                    dataSector.putArray("blocks", blocksXSector);
+                                    dataSector.putInt("sector", sectores.getMap(i).getInt("sector"));
+
+                                    readDataSectors.pushMap(dataSector);
+                                    break;
+
+                                case OP_WRITE:
+                                    for (int k = 0; k < sectores.getMap(i).getArray("blocks").size(); k++)
+                                    {
+                                        ReadableMap rmBloque = sectores.getMap(i).getArray("blocks").getMap(k);
+
+                                        ReadableNativeArray data = (ReadableNativeArray)rmBloque.getArray("data");
+
+                                        int[] writeDataA = new int[data.size()];
+                                        for(int l = 0; l < data.size(); l++)
+                                            writeDataA[l] = data.getInt(l);
+
+                                        int blockIndex = 4 * sectores.getMap(i).getInt("sector") + rmBloque.getInt("index");
+                                        tag.writeBlock(blockIndex, arrayIntsToArrayBytes(writeDataA));
+
+                                        blocksXSector.pushMap(Arguments.createMap());
+                                    }
+                                    dataSector.putArray("blocks", blocksXSector);
+                                    dataSector.putInt("sector", sectores.getMap(i).getInt("sector"));
+                                    writeData.pushMap(dataSector);
+                                    break;
+
+                                default:
+                                    break;
+                            }
+                        }
+                        else {
+                            WritableMap error = Arguments.createMap();
+                            error.putString("error", "Auth error");
+
+                            reactContext
+                                    .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
+                                    .emit("onTagDetected", error);
+
+                            operation = OP_NOT_READY;
+                            return;
+                        }
+                    }
+
+                    tag.close();
+
+                    readData.putArray("lectura",readDataSectors);
+                    if (operation.equals(OP_READ)) {
+                        reactContext
+                                .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
+                                .emit("onTagRead", readData);
+                    }
+
+                    if (operation.equals(OP_WRITE)){
+                        reactContext
+                                .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
+                                .emit("onTagWrite", writeData);
+                    }
+
+                    tag.close();
+                } catch (Exception ex) {
+                    WritableMap error = Arguments.createMap();
+                    error.putString("error", ex.toString());
+
+                    reactContext
+                            .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
+                            .emit("onTagError", error);
+                    tag = null;
+                } finally {
+                    operation = OP_NOT_READY;
+                }
+            }
+        }
+    }
+
     public NfcReactNativeModule(ReactApplicationContext reactContext) {
         super(reactContext);
         this.reactContext = reactContext;
+        this.tag = null;
+
         this.reactContext.addActivityEventListener(this);
+        this.reactContext.addLifecycleEventListener(this);
+
+        ScheduledExecutorService exec = Executors.newSingleThreadScheduledExecutor();
+        exec.scheduleAtFixedRate(new ThreadLectura(), 0, 5, TimeUnit.SECONDS);
+
         this.operation = OP_NOT_READY;
     }
 
     @Override
-    public void onNewIntent(Intent intent) {
-        if (this.operation.equals(OP_NOT_READY)) {
-            return;
-        }
-        
-        MifareClassic tag = MifareClassic.get( (Tag)intent.getParcelableExtra(NfcAdapter.EXTRA_TAG));
-        try {
-            tag.connect();
-            ByteBuffer bb = ByteBuffer.wrap(tag.getTag().getId());
-            int id = bb.getInt();
-            if (this.operation.equals(OP_ID)) {
-                WritableMap idData = Arguments.createMap();
-                idData.putInt("id", id);
-                this.tagPromise.resolve(idData);
-                return;
-            }
-            WritableMap readData = Arguments.createMap();
-            WritableArray readDataSectors = Arguments.createArray();
-            readData.putInt("card", id);
-            WritableArray writeData = Arguments.createArray();
-            for (int i = 0; i < this.sectores.size(); i++) {
-                ReadableMap sector = this.sectores.getMap(i);
-                boolean authResult;
-                if (this.sectores.getMap(i).getString("tipoClave").equals("A")) {
-                    authResult = tag.authenticateSectorWithKeyA(this.sectores.getMap(i).getInt("sector"), hexStringToByteArray(this.sectores.getMap(i).getString("clave")));
-                } else {
-                    authResult = tag.authenticateSectorWithKeyB(this.sectores.getMap(i).getInt("sector"), hexStringToByteArray(this.sectores.getMap(i).getString("clave")));
-                }
-                if (this.cardId != 0 && this.operation.equals(OP_WRITE) && this.cardId != id) {
-                    this.tagPromise.reject("Id Error", "Apoye la misma tarjeta que leyo por primera vez");
-                    return;
-                }
-                if (authResult) {
-                    WritableMap dataSector = Arguments.createMap();
-                    WritableArray bloquesXSector = Arguments.createArray();
-                    switch (this.operation) {
-                        case OP_READ:
-                            for (int j = 0; j < this.sectores.getMap(i).getArray("bloques").size(); j++) {
-                                int iBloque = this.sectores.getMap(i).getArray("bloques").getInt(j);
-                                bloquesXSector.pushArray(Arguments.fromArray(arrayBytesToArrayInts(tag.readBlock(4 * this.sectores.getMap(i).getInt("sector") + iBloque))));
-                            }
-                            dataSector.putArray("bloques", bloquesXSector);
-                            dataSector.putInt("sector", this.sectores.getMap(i).getInt("sector"));
-                            readDataSectors.pushMap(dataSector);
-                            break;
-                        case OP_WRITE:
-                            for (int k = 0; k < this.sectores.getMap(i).getArray("bloques").size(); k++) {
-                                ReadableMap rmBloque = this.sectores.getMap(i).getArray("bloques").getMap(k);
-                                ReadableNativeArray data = (ReadableNativeArray)rmBloque.getArray("data");
-                                int[] writeDataA = new int[data.size()];
-                                for(int l = 0; l < data.size(); l++)
-                                    writeDataA[l] = data.getInt(l);
-                                tag.writeBlock(4 * this.sectores.getMap(i).getInt("sector") + rmBloque.getInt("indice"), arrayIntsToArrayBytes(writeDataA));
-                                bloquesXSector.pushMap(Arguments.createMap());
-                            }
-                            dataSector.putArray("bloques", bloquesXSector);
-                            dataSector.putInt("sector", this.sectores.getMap(i).getInt("sector"));
-                            writeData.pushMap(dataSector);
-                            break;
-                        case OP_NOT_READY:
-                            return;
-                        default:
-                            break;
-                    }
-                }
-                else {
-                    this.tagPromise.reject("Auth Error", "Error de Autenticación con la tarjeta");
-                    return;
-                }
-            }
-            tag.close();
-            readData.putArray("lectura",readDataSectors);
-            if (this.operation.equals(OP_READ)) {
-                this.tagPromise.resolve(readData);
-            }
-            if (this.operation.equals(OP_WRITE)){
-                this.tagPromise.resolve(writeData);
-            }
-        } catch (Exception ex) {
-            StringWriter sw = new StringWriter();
-            PrintWriter pw = new PrintWriter(sw);
-            this.tagPromise.reject(sw.toString(), ex.getMessage());
-        } finally {
-            this.operation = OP_NOT_READY;
+    public void onHostResume() {
+        if (mNfcAdapter != null) {
+            setupForegroundDispatch(getCurrentActivity(), mNfcAdapter);
+        } else {
+            mNfcAdapter = NfcAdapter.getDefaultAdapter(this.reactContext);
         }
     }
 
     @Override
-    public void onActivityResult(
-      final Activity activity,
-      final int requestCode,
-      final int resultCode,
-      final Intent intent) {
+    public void onHostPause() {
+        if (mNfcAdapter != null)
+            stopForegroundDispatch(getCurrentActivity(), mNfcAdapter);
     }
 
+    @Override
+    public void onHostDestroy() {
+        // Activity `onDestroy`
+    }
+
+    private void handleIntent(Intent intent) {
+        this.tag = MifareClassic.get( (Tag)intent.getParcelableExtra(NfcAdapter.EXTRA_TAG));
+    }
+
+    public static void setupForegroundDispatch(final Activity activity, NfcAdapter adapter) {
+        final Intent intent = new Intent(activity.getApplicationContext(), activity.getClass());
+        intent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
+
+        final PendingIntent pendingIntent = PendingIntent.getActivity(activity.getApplicationContext(), 0, intent, 0);
+        adapter.enableForegroundDispatch(activity, pendingIntent, null, null);
+    }
+
+    public static void stopForegroundDispatch(final Activity activity, NfcAdapter adapter) {
+        adapter.disableForegroundDispatch(activity);
+    }
+
+    @Override
+    public void onNewIntent(Intent intent) {
+        handleIntent(intent);
+    }
+
+    @Override
+    public void onActivityResult(
+            final Activity activity,
+            final int requestCode,
+            final int resultCode,
+            final Intent intent) {
+    }
     /**
      * @return the name of this module. This will be the name used to {@code require()} this module
      * from javascript.
@@ -155,37 +266,22 @@ class NfcReactNativeModule extends ReactContextBaseJavaModule implements Activit
     }
 
     @ReactMethod
-    public void readTag(ReadableArray sectores,
-                        Promise promise) {
-        this.cancelOperation();
+    public void readTag(ReadableArray sectores) {
         this.sectores = sectores;
         this.operation = OP_READ;
-        this.tagPromise = promise;
     }
 
     @ReactMethod
     public void writeTag(ReadableArray sectores,
-                         int cardId,
-                         Promise promise) {
-        this.cancelOperation();
-        this.cardId = cardId;
+                         int tagId) {
+        this.tagId = tagId;
         this.sectores = sectores;
         this.operation = OP_WRITE;
-        this.tagPromise = promise;
     }
 
     @ReactMethod
-    public void getCardId(Promise promise) {
-        this.cancelOperation();
+    public void getTagId() {
         this.operation = OP_ID;
-        this.tagPromise = promise;
-    }
-
-    private void cancelOperation () {
-        if (!this.operation.equals(OP_NOT_READY)) {
-            this.tagPromise.reject("Operacion Cancelada");
-            this.operation = OP_NOT_READY;
-        }
     }
 
     private static byte[] hexStringToByteArray(String s) {
