@@ -32,44 +32,78 @@ nfc-react-native is a react-native module for android to write/read Mifare Class
 import {readTag, writeTag} from 'nfc-react-native'
 
 ...
-  //get card id
-  getCardId()
-    .then((card) => {
-      console.log(card)
-    }).catch((err) => {
-      console.log(err)
-  })    
+export default class NfcSample extends Component {
+  readTagId() {
+    getTagId()
+  }
 
-  //read multiple sectors + blocks and get card id
-  readTag([{ sector: 5, bloques: [1,2], clave: 'FFFFFFFFFFFF', tipoClave: 'A' },
-    { sector: 6, bloques: [0,1,2], clave: 'FFFFFFFFFFFF', tipoClave: 'A' },
-    { sector: 4, bloques: [0], clave: 'FFFFFFFFFFFF', tipoClave: 'A' }])
-  .then((card) => {
-    console.log(card)
-    // returns Object {lectura: Array[3], card: "A3F813DB"}
-  }).catch((err) => {
-    console.log(err.message)
-  })
+  readTagData() {
+    readTag([
+      { sector: 1, blocks: [1,2], clave: 'FFFFFFFFFFFF', keyType: 'A' },
+      { sector: 2, blocks: [0,1,2], clave: 'FFFFFFFFFFFF', keyType: 'A' },
+      { sector: 3, blocks: [0], clave: 'FFFFFFFFFFFF', keyType: 'A' }
+    ])
+  }
 
-  //writes multiple sectors and blocks but you must provide card id
-  writeTag([{ sector: 5, bloques: [ 
-   { indice: 1, data: [15,15,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,15,15] },
-   { indice: 2, data: [15,15,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,15,15] } ],
-    clave: 'FFFFFFFFFFFF', tipoClave: 'A' },
-    { sector: 6, bloques: [ 
-   { indice: 0, data: [15,15,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,15,15] },
-   { indice: 1, data: [15,15,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,15,15] },
-   { indice: 2, data: [15,15,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,15,15] } ],
-    clave: 'FFFFFFFFFFFF', tipoClave: 'A' },
-   { sector: 4, bloques: [ 
-   { indice: 0, data: [15,15,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,15,15] } ],
-    clave: 'FFFFFFFFFFFF', tipoClave: 'A' },
-    ], "A3F813DB")
-   .then((card) => {
-     console.log(card)
-   }).catch((err) => {
-     console.log(err.message)
-   })
+  writeTagData() {
+    writeTag([{ sector: 1, blocks: [ 
+    { index: 1, data: [15,15,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,15,15] },
+    { index: 2, data: [15,15,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,15,15] } ],
+      clave: 'FFFFFFFFFFFF', keyType: 'A' },
+      { sector: 2, blocks: [ 
+    { index: 0, data: [15,15,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,15,15] },
+    { index: 1, data: [15,15,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,15,15] },
+    { index: 2, data: [15,15,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,15,15] } ],
+      clave: 'FFFFFFFFFFFF', keyType: 'A' },
+    { sector: 3, blocks: [ 
+    { index: 0, data: [15,15,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,15,15] } ],
+      clave: 'FFFFFFFFFFFF', keyType: 'A' },
+      ], 1148002313)
+  }
+
+  componentDidMount() {
+    DeviceEventEmitter.addListener('onTagError', function (e) {
+        console.log('error', e)
+        Alert.alert(JSON.stringify(e))
+    })
+
+    DeviceEventEmitter.addListener('onTagDetected', function (e) {
+        Alert.alert(JSON.stringify(e))
+    })
+
+    DeviceEventEmitter.addListener('onTagRead', (e) => {
+        console.log('reading', e)
+        Alert.alert(JSON.stringify(e))
+    })
+
+    DeviceEventEmitter.addListener('onTagWrite', (e) => {
+        console.log('writing', e)
+        Alert.alert(JSON.stringify(e))
+    })
+  }
+
+  render() {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.welcome}>
+          Welcome to React Native!
+        </Text>
+        <Button
+          onPress={this.readTagId}
+          title="Get id of Tag"
+        />
+        <Button
+          onPress={this.readTagData}
+          title="Get sectors of a Tag"
+        />
+        <Button
+          onPress={this.writeTagData}
+          title="Write sectors of a Tag"
+        />
+      </View>
+    );
+  }
+}
 ...
 ```
 
