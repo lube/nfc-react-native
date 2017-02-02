@@ -1,0 +1,5 @@
+rootProject.name = 'NfcSample'
+include ':nfc-react-native'
+project(':nfc-react-native').projectDir = new File(rootProject.projectDir, '../node_modules/nfc-react-native/android')
+
+include ':app'

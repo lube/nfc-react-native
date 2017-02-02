@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<items version="2" >
+
+    <item
+        jar="/home/dev/Dev/J/React-Native/NfcSample/android/app/build/intermediates/exploded-aar/NfcSample/nfc-react-native/unspecified/jars/classes.jar"
+        jumboMode="false"
+        revision="23.0.1"
+        sha1="1fc3618b3367c53827e054f79be8166875a16ca6">
+        <dex dex="/home/dev/Dev/J/React-Native/NfcSample/android/app/build/intermediates/pre-dexed/debug/classes-aedc416e19a0ffe712047a3587da66b1ec0f6195.jar" />
+    </item>
+
+</items>
