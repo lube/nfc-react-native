@@ -29,7 +29,7 @@ nfc-react-native is a react-native module for android to write/read Mifare Class
 
 ## Usage
 ```javascript
-import {readTag, writeTag} from 'nfc-react-native'
+import { getTagId, readTag, writeTag } from 'nfc-react-native'
 
 ...
 export default class NfcSample extends Component {
