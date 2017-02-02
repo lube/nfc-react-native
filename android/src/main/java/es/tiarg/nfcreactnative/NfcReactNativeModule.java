@@ -49,33 +49,33 @@ import static com.facebook.common.util.Hex.hexStringToByteArray;
 class NfcReactNativeModule extends ReactContextBaseJavaModule implements ActivityEventListener, LifecycleEventListener {
     private ReactApplicationContext reactContext;
 
-    private String operation;
+    private boolean idOperation;
+    private boolean readOperation;
+    private boolean writeOperation;
     private int tagId;
 
     private ReadableArray sectores;
     private NfcAdapter mNfcAdapter;
     private MifareClassic tag;
 
-    private static final String OP_ID = "ID";
-    private static final String OP_WRITE = "WRITE";
-    private static final String OP_READ = "READ";
-    private static final String OP_NOT_READY = "NOT_READY";
 
     private class ThreadLectura implements Runnable {
         public void run() {
-            if (tag != null && operation != OP_NOT_READY) {
+            if (tag != null && (idOperation || readOperation || writeOperation)) {
                 try {
                     tag.connect();
 
                     ByteBuffer bb = ByteBuffer.wrap(tag.getTag().getId());
                     int id = bb.getInt();
 
-                    if (operation.equals(OP_ID)) {
+                    if (idOperation) {
                         WritableMap idData = Arguments.createMap();
                         idData.putInt("id", id);
                         reactContext
                                 .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
                                 .emit("onTagDetected", idData);
+
+                        idOperation = false;
                         return;
                     }
 
@@ -93,7 +93,7 @@ class NfcReactNativeModule extends ReactContextBaseJavaModule implements Activit
                             authResult = tag.authenticateSectorWithKeyB(sectores.getMap(i).getInt("sector"), hexStringToByteArray(sectores.getMap(i).getString("clave")));
                         }
 
-                        if (tagId != 0 && operation.equals(OP_WRITE) && tagId != id) {
+                        if (tagId != 0 && writeOperation && tagId != id) {
                             WritableMap error = Arguments.createMap();
                             error.putString("error", "Tag id doesn't match");
 
@@ -101,53 +101,47 @@ class NfcReactNativeModule extends ReactContextBaseJavaModule implements Activit
                                     .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
                                     .emit("onTagError", error);
 
-                            operation = OP_NOT_READY;
+                            writeOperation = false;
                             return;
                         }
                         
                         if (authResult) {
-                            
                             WritableMap dataSector = Arguments.createMap();
                             WritableArray blocksXSector = Arguments.createArray();
                             
-                            switch (operation) {
-                                case OP_READ:
-                                    for (int j = 0; j < sectores.getMap(i).getArray("blocks").size(); j++) 
-                                    {
-                                        int iBloque = sectores.getMap(i).getArray("blocks").getInt(j);
-                                        byte[] blockData = tag.readBlock(4 * sectores.getMap(i).getInt("sector") + iBloque);
-                                        blocksXSector.pushArray(Arguments.fromArray(arrayBytesToArrayInts(blockData)));
-                                    }
+                            if (readOperation) {
+                                for (int j = 0; j < sectores.getMap(i).getArray("blocks").size(); j++) 
+                                {
+                                    int iBloque = sectores.getMap(i).getArray("blocks").getInt(j);
+                                    byte[] blockData = tag.readBlock(4 * sectores.getMap(i).getInt("sector") + iBloque);
+                                    blocksXSector.pushArray(Arguments.fromArray(arrayBytesToArrayInts(blockData)));
+                                }
 
-                                    dataSector.putArray("blocks", blocksXSector);
-                                    dataSector.putInt("sector", sectores.getMap(i).getInt("sector"));
+                                dataSector.putArray("blocks", blocksXSector);
+                                dataSector.putInt("sector", sectores.getMap(i).getInt("sector"));
 
-                                    readDataSectors.pushMap(dataSector);
-                                    break;
+                                readDataSectors.pushMap(dataSector);
+                            }
+                            
+                            if (writeOperation) {
+                                for (int k = 0; k < sectores.getMap(i).getArray("blocks").size(); k++)
+                                {
+                                    ReadableMap rmBloque = sectores.getMap(i).getArray("blocks").getMap(k);
 
-                                case OP_WRITE:
-                                    for (int k = 0; k < sectores.getMap(i).getArray("blocks").size(); k++)
-                                    {
-                                        ReadableMap rmBloque = sectores.getMap(i).getArray("blocks").getMap(k);
+                                    ReadableNativeArray data = (ReadableNativeArray)rmBloque.getArray("data");
 
-                                        ReadableNativeArray data = (ReadableNativeArray)rmBloque.getArray("data");
+                                    int[] writeDataA = new int[data.size()];
+                                    for(int l = 0; l < data.size(); l++)
+                                        writeDataA[l] = data.getInt(l);
 
-                                        int[] writeDataA = new int[data.size()];
-                                        for(int l = 0; l < data.size(); l++)
-                                            writeDataA[l] = data.getInt(l);
+                                    int blockIndex = 4 * sectores.getMap(i).getInt("sector") + rmBloque.getInt("index");
+                                    tag.writeBlock(blockIndex, arrayIntsToArrayBytes(writeDataA));
 
-                                        int blockIndex = 4 * sectores.getMap(i).getInt("sector") + rmBloque.getInt("index");
-                                        tag.writeBlock(blockIndex, arrayIntsToArrayBytes(writeDataA));
-
-                                        blocksXSector.pushMap(Arguments.createMap());
-                                    }
-                                    dataSector.putArray("blocks", blocksXSector);
-                                    dataSector.putInt("sector", sectores.getMap(i).getInt("sector"));
-                                    writeData.pushMap(dataSector);
-                                    break;
-
-                                default:
-                                    break;
+                                    blocksXSector.pushMap(Arguments.createMap());
+                                }
+                                dataSector.putArray("blocks", blocksXSector);
+                                dataSector.putInt("sector", sectores.getMap(i).getInt("sector"));
+                                writeData.pushMap(dataSector);
                             }
                         }
                         else {
@@ -158,27 +152,28 @@ class NfcReactNativeModule extends ReactContextBaseJavaModule implements Activit
                                     .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
                                     .emit("onTagDetected", error);
 
-                            operation = OP_NOT_READY;
+                            writeOperation = false;
+                            readOperation = false;
                             return;
                         }
                     }
 
-                    tag.close();
 
                     readData.putArray("lectura",readDataSectors);
-                    if (operation.equals(OP_READ)) {
+                    if (readOperation) {
                         reactContext
                                 .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
                                 .emit("onTagRead", readData);
+                        readOperation = false;
                     }
 
-                    if (operation.equals(OP_WRITE)){
+                    if (writeOperation){
                         reactContext
                                 .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
                                 .emit("onTagWrite", writeData);
+                        writeOperation = false;
                     }
 
-                    tag.close();
                 } catch (Exception ex) {
                     WritableMap error = Arguments.createMap();
                     error.putString("error", ex.toString());
@@ -188,7 +183,7 @@ class NfcReactNativeModule extends ReactContextBaseJavaModule implements Activit
                             .emit("onTagError", error);
                     tag = null;
                 } finally {
-                    operation = OP_NOT_READY;
+                    tag.close();
                 }
             }
         }
@@ -203,9 +198,11 @@ class NfcReactNativeModule extends ReactContextBaseJavaModule implements Activit
         this.reactContext.addLifecycleEventListener(this);
 
         ScheduledExecutorService exec = Executors.newSingleThreadScheduledExecutor();
-        exec.scheduleAtFixedRate(new ThreadLectura(), 0, 5, TimeUnit.SECONDS);
+        exec.scheduleAtFixedRate(new ThreadLectura(), 0, 1, TimeUnit.SECONDS);
 
-        this.operation = OP_NOT_READY;
+        this.idOperation = false;
+        this.readOperation = false;
+        this.writeOperation = false;
     }
 
     @Override
@@ -268,7 +265,7 @@ class NfcReactNativeModule extends ReactContextBaseJavaModule implements Activit
     @ReactMethod
     public void readTag(ReadableArray sectores) {
         this.sectores = sectores;
-        this.operation = OP_READ;
+        this.readOperation = true;
     }
 
     @ReactMethod
@@ -276,12 +273,12 @@ class NfcReactNativeModule extends ReactContextBaseJavaModule implements Activit
                          int tagId) {
         this.tagId = tagId;
         this.sectores = sectores;
-        this.operation = OP_WRITE;
+        this.writeOperation = true;
     }
 
     @ReactMethod
     public void getTagId() {
-        this.operation = OP_ID;
+        this.idOperation = true;
     }
 
     private static byte[] hexStringToByteArray(String s) {
