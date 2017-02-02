@@ -132,7 +132,7 @@ Your main activity should look like
 </activity>
 ```
 
-Add a xml file in res folder with the following:
+Add a xml file in android/app/src/main/res folder (create if it doesn't exist) with the following:
 ```xml
 <resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
   <tech-list>
