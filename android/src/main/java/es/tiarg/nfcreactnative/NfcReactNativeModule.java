@@ -76,6 +76,7 @@ class NfcReactNativeModule extends ReactContextBaseJavaModule implements Activit
                                 .emit("onTagDetected", idData);
 
                         idOperation = false;
+                        tag.close();
                         return;
                     }
 
@@ -102,6 +103,7 @@ class NfcReactNativeModule extends ReactContextBaseJavaModule implements Activit
                                     .emit("onTagError", error);
 
                             writeOperation = false;
+                            tag.close();
                             return;
                         }
                         
@@ -154,9 +156,11 @@ class NfcReactNativeModule extends ReactContextBaseJavaModule implements Activit
 
                             writeOperation = false;
                             readOperation = false;
+                            tag.close();
                             return;
                         }
                     }
+                    tag.close();
 
 
                     readData.putArray("lectura",readDataSectors);
@@ -182,8 +186,6 @@ class NfcReactNativeModule extends ReactContextBaseJavaModule implements Activit
                             .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
                             .emit("onTagError", error);
                     tag = null;
-                } finally {
-                    tag.close();
                 }
             }
         }
